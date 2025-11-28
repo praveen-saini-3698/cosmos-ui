@@ -4,14 +4,77 @@ import { useState, useMemo, useEffect, useCallback } from "react"
 import { useCosmos } from "@/lib/cosmos-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { SqlEditor } from "@/components/ui/sql-highlighter"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { Play, RotateCcw, Sparkles } from "lucide-react"
+import { Play, RotateCcw, Sparkles, AlignLeft } from "lucide-react"
 
 const DEFAULT_QUERY = "SELECT * FROM c"
+
+// SQL Formatter/Beautifier
+function formatSql(sql: string): string {
+  // Normalize whitespace
+  let formatted = sql.replace(/\s+/g, " ").trim()
+  
+  // Handle operators with proper spacing using placeholders
+  // First, normalize all operators to have consistent spacing
+  // Order matters: handle multi-char operators first
+  formatted = formatted.replace(/\s*!=\s*/g, " != ")
+  formatted = formatted.replace(/\s*<>\s*/g, " <> ")
+  formatted = formatted.replace(/\s*>=\s*/g, " >= ")
+  formatted = formatted.replace(/\s*<=\s*/g, " <= ")
+  
+  // For single char operators, use word boundaries or specific patterns
+  // to avoid breaking >= and <=
+  formatted = formatted.replace(/([^<>!])=([^=])/g, "$1 = $2")
+  formatted = formatted.replace(/([^<])>([^=])/g, "$1 > $2")
+  formatted = formatted.replace(/([^>])<([^=<])/g, "$1 < $2")
+  
+  // Keywords that should start on a new line (with no indent)
+  const mainKeywords = ["SELECT", "FROM", "WHERE", "ORDER BY", "GROUP BY", "HAVING", "LIMIT", "OFFSET", "JOIN", "LEFT JOIN", "RIGHT JOIN", "INNER JOIN", "OUTER JOIN", "CROSS JOIN", "UNION", "INTERSECT", "EXCEPT"]
+  
+  // Keywords that should start on a new line with indent
+  const indentKeywords = ["AND", "OR"]
+  
+  // Process main keywords - add newline before
+  mainKeywords.forEach(keyword => {
+    const regex = new RegExp(`\\s+${keyword}\\s+`, "gi")
+    formatted = formatted.replace(regex, `\n${keyword} `)
+  })
+  
+  // Process indent keywords - add newline + indent before
+  indentKeywords.forEach(keyword => {
+    const regex = new RegExp(`\\s+${keyword}\\s+`, "gi")
+    formatted = formatted.replace(regex, `\n  ${keyword} `)
+  })
+
+  // Handle SELECT fields - put each on new line if there are many
+  const selectMatch = formatted.match(/^SELECT\s+(.*?)\s*\nFROM/i)
+  if (selectMatch) {
+    const fields = selectMatch[1]
+    const fieldList = fields.split(",").map(f => f.trim())
+    
+    if (fieldList.length > 3) {
+      const formattedFields = fieldList.map((f, i) => 
+        i === 0 ? f : `       ${f}`
+      ).join(",\n")
+      formatted = formatted.replace(selectMatch[1], `\n  ${formattedFields}\n`)
+    }
+  }
+  
+  // Clean up multiple newlines
+  formatted = formatted.replace(/\n{3,}/g, "\n\n")
+  
+  // Fix any double/triple spaces
+  formatted = formatted.replace(/ {2,}/g, " ")
+  
+  // Trim each line
+  formatted = formatted.split("\n").map(line => line.trim()).join("\n")
+  
+  return formatted
+}
 
 // Helper functions to store/retrieve queries per container
 function getStoredQuery(database: string, container: string): string | null {
@@ -145,15 +208,15 @@ export function QueryBox() {
 
       {isExpanded && (
         <div className={cn(
-          "p-4 pt-0 space-y-3 border-t transition-colors",
+          "p-0 pt-0 space-y-3 border-t transition-colors",
           "dark:border-slate-800",
           "border-slate-200"
         )}>
-          <Textarea
+          <SqlEditor
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
             placeholder="Enter your SQL query here... e.g., SELECT * FROM c WHERE c.status = 'active'"
-            className="min-h-[100px] text-sm"
+            minHeight="100px"
             disabled={isDisabled}
           />
           
@@ -188,6 +251,16 @@ export function QueryBox() {
               </p>
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setQuery(formatSql(query))}
+                disabled={isLoading || isDisabled || !query.trim()}
+                title="Format query"
+              >
+                <AlignLeft className="w-4 h-4 mr-2" />
+                Format
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

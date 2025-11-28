@@ -1,12 +1,20 @@
 {
   "name": "cosmos-ui",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "description": "Cosmos DB Explorer - A modern UI for Azure Cosmos DB",
+  "author": "Cosmos UI",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev -p 8085",
     "build": "next build",
     "start": "next start -p 8085",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:8085 && electron .\"",
+    "electron:build": "npm run build && electron-builder",
+    "electron:build:mac": "npm run build && electron-builder --mac --dir",
+    "electron:build:dmg": "npm run build && electron-builder --mac dmg",
+    "preelectron:build": "node scripts/generate-icons.js"
   },
   "dependencies": {
     "@azure/cosmos": "^4.9.0",
@@ -35,9 +43,90 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^8.2.2",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "eslint": "^9",
     "eslint-config-next": "16.0.5",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.cosmosui.app",
+    "productName": "Cosmos UI",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "!node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/standalone",
+        "to": "app/.next/standalone",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": ".next/static",
+        "to": "app/.next/standalone/.next/static",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "public",
+        "to": "app/.next/standalone/public",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "build/icon.icns",
+        "to": "icon.icns"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null,
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}.${ext}"
+    },
+    "dmg": {
+      "title": "${productName}",
+      "artifactName": "${productName}-${version}.${ext}"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "portable"
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        "AppImage"
+      ]
+    }
   }
 }

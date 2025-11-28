@@ -350,48 +350,48 @@ export function DataTable({ onCreateNew }: DataTableProps) {
             Create Document
           </Button>
           {searchQuery && documents.length > 0 && (
-            <p className={cn(
-              "text-sm transition-colors",
+          <p className={cn(
+            "text-sm transition-colors",
               "dark:text-slate-400 text-slate-600"
-            )}>
+          )}>
               Found <span className="font-semibold">{filteredDocuments.length}</span> of {documents.length} documents
-            </p>
+          </p>
           )}
-        </div>
-        
+      </div>
+
         {/* Right side - Search */}
-        {documents.length > 0 && (
+      {documents.length > 0 && (
           <div className="relative flex justify-end">
             <div className="relative w-64 focus-within:w-80 transition-all duration-200">
-              <Search className={cn(
-                "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors",
-                "dark:text-slate-500 text-slate-400"
-              )} />
-              <Input
-                type="text"
+            <Search className={cn(
+              "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors",
+              "dark:text-slate-500 text-slate-400"
+            )} />
+            <Input
+              type="text"
                 placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
                 className={cn(
                   "pl-9 pr-8 h-9 text-sm w-full",
                   "focus:ring-2 focus:ring-cyan-500/50"
                 )}
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className={cn(
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className={cn(
                     "absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full transition-colors",
-                    "dark:hover:bg-slate-800 hover:bg-slate-200"
-                  )}
-                >
+                  "dark:hover:bg-slate-800 hover:bg-slate-200"
+                )}
+              >
                   <X className="w-3 h-3" />
-                </button>
-              )}
+              </button>
+            )}
             </div>
           </div>
-        )}
-      </div>
+          )}
+        </div>
 
       {/* Table */}
       <div className="flex-1 min-h-0 overflow-auto">
