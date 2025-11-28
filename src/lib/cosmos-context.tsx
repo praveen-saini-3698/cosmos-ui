@@ -18,12 +18,17 @@ interface CosmosContextType {
   connection: ConnectionState
   setConnection: (connection: ConnectionState) => void
   disconnect: () => void
+  accountName: string | null
   
   // Database state
   databases: DatabaseWithContainers[]
   setDatabases: React.Dispatch<React.SetStateAction<DatabaseWithContainers[]>>
   loadDatabases: () => Promise<void>
   loadContainers: (databaseId: string) => Promise<void>
+  createDatabase: (databaseId: string) => Promise<boolean>
+  deleteDatabase: (databaseId: string) => Promise<boolean>
+  createContainer: (databaseId: string, containerId: string, partitionKey: string) => Promise<boolean>
+  deleteContainer: (databaseId: string, containerId: string) => Promise<boolean>
   
   // Selected state
   selectedItem: SelectedItem
@@ -49,6 +54,17 @@ interface CosmosContextType {
 
 const CosmosContext = createContext<CosmosContextType | undefined>(undefined)
 
+// Extract account name from connection string
+function extractAccountName(connectionString: string): string | null {
+  try {
+    // Format: AccountEndpoint=https://ACCOUNTNAME.documents.azure.com:443/;AccountKey=...
+    const match = connectionString.match(/AccountEndpoint=https:\/\/([^.]+)\./)
+    return match ? match[1] : null
+  } catch {
+    return null
+  }
+}
+
 export function CosmosProvider({ children }: { children: React.ReactNode }) {
   const [connection, setConnectionState] = useState<ConnectionState>({
     isConnected: false,
@@ -63,6 +79,11 @@ export function CosmosProvider({ children }: { children: React.ReactNode }) {
     continuationTokens: [undefined],
   })
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Extract account name from connection string
+  const accountName = connection.connectionString 
+    ? extractAccountName(connection.connectionString) 
+    : null
 
   // Check for stored connection on mount
   useEffect(() => {
@@ -165,6 +186,150 @@ export function CosmosProvider({ children }: { children: React.ReactNode }) {
       )
     }
   }, [connection.connectionString])
+
+  const createDatabase = useCallback(async (databaseId: string): Promise<boolean> => {
+    if (!connection.connectionString) return false
+
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/cosmos/databases/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          connectionString: connection.connectionString,
+          databaseId,
+        }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        toast.success("Database created successfully")
+        await loadDatabases()
+        return true
+      } else {
+        toast.error("Failed to create database", { description: data.error })
+        return false
+      }
+    } catch (error) {
+      toast.error("Failed to create database", { description: String(error) })
+      return false
+    } finally {
+      setIsLoading(false)
+    }
+  }, [connection.connectionString, loadDatabases])
+
+  const deleteDatabase = useCallback(async (databaseId: string): Promise<boolean> => {
+    if (!connection.connectionString) return false
+
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/cosmos/databases/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          connectionString: connection.connectionString,
+          databaseId,
+        }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        toast.success("Database deleted successfully")
+        // Clear selection if deleted database was selected
+        if (selectedItem.database === databaseId) {
+          setSelectedItem({})
+          setDocuments([])
+        }
+        await loadDatabases()
+        return true
+      } else {
+        toast.error("Failed to delete database", { description: data.error })
+        return false
+      }
+    } catch (error) {
+      toast.error("Failed to delete database", { description: String(error) })
+      return false
+    } finally {
+      setIsLoading(false)
+    }
+  }, [connection.connectionString, loadDatabases, selectedItem.database])
+
+  const createContainer = useCallback(async (
+    databaseId: string,
+    containerId: string,
+    partitionKey: string
+  ): Promise<boolean> => {
+    if (!connection.connectionString) return false
+
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/cosmos/containers/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          connectionString: connection.connectionString,
+          databaseId,
+          containerId,
+          partitionKey,
+        }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        toast.success("Container created successfully")
+        await loadContainers(databaseId)
+        return true
+      } else {
+        toast.error("Failed to create container", { description: data.error })
+        return false
+      }
+    } catch (error) {
+      toast.error("Failed to create container", { description: String(error) })
+      return false
+    } finally {
+      setIsLoading(false)
+    }
+  }, [connection.connectionString, loadContainers])
+
+  const deleteContainer = useCallback(async (
+    databaseId: string,
+    containerId: string
+  ): Promise<boolean> => {
+    if (!connection.connectionString) return false
+
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/cosmos/containers/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          connectionString: connection.connectionString,
+          databaseId,
+          containerId,
+        }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        toast.success("Container deleted successfully")
+        // Clear selection if deleted container was selected
+        if (selectedItem.database === databaseId && selectedItem.container === containerId) {
+          setSelectedItem({ database: databaseId })
+          setDocuments([])
+        }
+        await loadContainers(databaseId)
+        return true
+      } else {
+        toast.error("Failed to delete container", { description: data.error })
+        return false
+      }
+    } catch (error) {
+      toast.error("Failed to delete container", { description: String(error) })
+      return false
+    } finally {
+      setIsLoading(false)
+    }
+  }, [connection.connectionString, loadContainers, selectedItem.database, selectedItem.container])
 
   const loadDocuments = useCallback(async (database: string, container: string, page: number = 0) => {
     if (!connection.connectionString) return
@@ -380,10 +545,15 @@ export function CosmosProvider({ children }: { children: React.ReactNode }) {
         connection,
         setConnection,
         disconnect,
+        accountName,
         databases,
         setDatabases,
         loadDatabases,
         loadContainers,
+        createDatabase,
+        deleteDatabase,
+        createContainer,
+        deleteContainer,
         selectedItem,
         setSelectedItem,
         documents,

@@ -1,12 +1,39 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useCosmos } from "@/lib/cosmos-context"
 import { useTheme } from "@/lib/theme-context"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import {
   Database,
@@ -17,6 +44,10 @@ import {
   Layers,
   Sun,
   Moon,
+  Plus,
+  Trash2,
+  MoreHorizontal,
+  Server,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 
@@ -34,7 +65,25 @@ export function Sidebar() {
     disconnect,
     isLoading,
     setPagination,
+    accountName,
+    createDatabase,
+    deleteDatabase,
+    createContainer,
+    deleteContainer,
   } = useCosmos()
+
+  // Dialog states
+  const [createDbDialogOpen, setCreateDbDialogOpen] = useState(false)
+  const [createContainerDialogOpen, setCreateContainerDialogOpen] = useState(false)
+  const [deleteDbDialogOpen, setDeleteDbDialogOpen] = useState(false)
+  const [deleteContainerDialogOpen, setDeleteContainerDialogOpen] = useState(false)
+  
+  // Form states
+  const [newDbName, setNewDbName] = useState("")
+  const [newContainerName, setNewContainerName] = useState("")
+  const [newPartitionKey, setNewPartitionKey] = useState("/id")
+  const [targetDatabaseId, setTargetDatabaseId] = useState("")
+  const [targetContainerId, setTargetContainerId] = useState("")
 
   useEffect(() => {
     loadDatabases()
@@ -75,6 +124,61 @@ export function Sidebar() {
     loadDatabases()
   }
 
+  const handleCreateDatabase = async () => {
+    if (!newDbName.trim()) return
+    const success = await createDatabase(newDbName.trim())
+    if (success) {
+      setCreateDbDialogOpen(false)
+      setNewDbName("")
+    }
+  }
+
+  const handleDeleteDatabase = async () => {
+    if (!targetDatabaseId) return
+    const success = await deleteDatabase(targetDatabaseId)
+    if (success) {
+      setDeleteDbDialogOpen(false)
+      setTargetDatabaseId("")
+    }
+  }
+
+  const handleCreateContainer = async () => {
+    if (!newContainerName.trim() || !newPartitionKey.trim() || !targetDatabaseId) return
+    const success = await createContainer(targetDatabaseId, newContainerName.trim(), newPartitionKey.trim())
+    if (success) {
+      setCreateContainerDialogOpen(false)
+      setNewContainerName("")
+      setNewPartitionKey("/id")
+      setTargetDatabaseId("")
+    }
+  }
+
+  const handleDeleteContainer = async () => {
+    if (!targetDatabaseId || !targetContainerId) return
+    const success = await deleteContainer(targetDatabaseId, targetContainerId)
+    if (success) {
+      setDeleteContainerDialogOpen(false)
+      setTargetDatabaseId("")
+      setTargetContainerId("")
+    }
+  }
+
+  const openCreateContainerDialog = (databaseId: string) => {
+    setTargetDatabaseId(databaseId)
+    setCreateContainerDialogOpen(true)
+  }
+
+  const openDeleteDatabaseDialog = (databaseId: string) => {
+    setTargetDatabaseId(databaseId)
+    setDeleteDbDialogOpen(true)
+  }
+
+  const openDeleteContainerDialog = (databaseId: string, containerId: string) => {
+    setTargetDatabaseId(databaseId)
+    setTargetContainerId(containerId)
+    setDeleteContainerDialogOpen(true)
+  }
+
   return (
     <div className={cn(
       "w-72 min-w-72 shrink-0 h-screen flex flex-col border-r backdrop-blur-sm transition-colors duration-300",
@@ -104,14 +208,32 @@ export function Sidebar() {
             </div>
           </div>
         </div>
+        
+        {/* Account Name */}
+        {accountName && (
+          <div className={cn(
+            "mt-3 p-2 rounded-lg flex items-center gap-2 transition-colors",
+            "dark:bg-slate-800/50",
+            "bg-slate-200/50"
+          )}>
+            <Server className="w-4 h-4 text-cyan-500 shrink-0" />
+            <span className={cn(
+              "text-xs font-medium truncate transition-colors",
+              "dark:text-slate-300 text-slate-700"
+            )}>
+              {accountName}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Theme Toggle & Actions */}
       <div className={cn(
-        "p-3 border-b flex gap-2 transition-colors duration-300",
+        "p-3 border-b flex flex-col gap-2 transition-colors duration-300",
         "dark:border-slate-800",
         "border-slate-200"
       )}>
+        <div className="flex gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -145,6 +267,17 @@ export function Sidebar() {
           )}
         >
           <LogOut className="w-4 h-4" />
+          </Button>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => setCreateDbDialogOpen(true)}
+          disabled={isLoading}
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          New Database
         </Button>
       </div>
 
@@ -170,11 +303,12 @@ export function Sidebar() {
                 open={database.isExpanded}
                 onOpenChange={() => handleDatabaseClick(database.id)}
               >
+                <div className="flex items-center group">
                 <CollapsibleTrigger asChild>
                   <Button
                     variant="ghost"
                     className={cn(
-                      "w-full justify-start gap-2 transition-colors",
+                        "flex-1 justify-start gap-2 transition-colors",
                       "dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50",
                       "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50",
                       selectedItem.database === database.id && cn(
@@ -194,14 +328,45 @@ export function Sidebar() {
                     {database.isLoading && <Spinner size="sm" />}
                   </Button>
                 </CollapsibleTrigger>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity",
+                          "dark:hover:bg-slate-700",
+                          "hover:bg-slate-300"
+                        )}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => openCreateContainerDialog(database.id)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        New Container
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-red-500 focus:text-red-400"
+                        onClick={() => openDeleteDatabaseDialog(database.id)}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete Database
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
                 <CollapsibleContent className="pl-6 space-y-1 mt-1">
                   {database.containers?.map((container) => (
+                    <div key={container.id} className="flex items-center group/container">
                     <Button
-                      key={container.id}
                       variant="ghost"
                       size="sm"
                       className={cn(
-                        "w-full justify-start gap-2 transition-colors",
+                          "flex-1 justify-start gap-2 transition-colors",
                         "dark:text-slate-500 dark:hover:text-white dark:hover:bg-slate-800/50",
                         "text-slate-500 hover:text-slate-900 hover:bg-slate-200/50",
                         selectedItem.database === database.id &&
@@ -216,12 +381,49 @@ export function Sidebar() {
                       <FolderOpen className="w-4 h-4" />
                       <span className="truncate">{container.id}</span>
                     </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              "h-6 w-6 opacity-0 group-hover/container:opacity-100 transition-opacity",
+                              "dark:hover:bg-slate-700",
+                              "hover:bg-slate-300"
+                            )}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreHorizontal className="w-3 h-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="text-red-500 focus:text-red-400"
+                            onClick={() => openDeleteContainerDialog(database.id, container.id)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete Container
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   ))}
                   {database.containers?.length === 0 && !database.isLoading && (
+                    <div className="flex items-center justify-between px-2 py-1">
                     <p className={cn(
-                      "text-xs px-2 py-1 transition-colors",
+                        "text-xs transition-colors",
                       "dark:text-slate-600 text-slate-400"
                     )}>No containers</p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={() => openCreateContainerDialog(database.id)}
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        Add
+                      </Button>
+                    </div>
                   )}
                 </CollapsibleContent>
               </Collapsible>
@@ -243,6 +445,147 @@ export function Sidebar() {
           {databases.length} database{databases.length !== 1 ? "s" : ""} connected
         </p>
       </div>
+
+      {/* Create Database Dialog */}
+      <Dialog open={createDbDialogOpen} onOpenChange={setCreateDbDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Database</DialogTitle>
+            <DialogDescription>
+              Enter a name for the new database.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="dbName">Database Name</Label>
+              <Input
+                id="dbName"
+                placeholder="my-database"
+                value={newDbName}
+                onChange={(e) => setNewDbName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreateDatabase()}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDbDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateDatabase} disabled={!newDbName.trim() || isLoading}>
+              {isLoading ? <Spinner size="sm" className="mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Container Dialog */}
+      <Dialog open={createContainerDialogOpen} onOpenChange={setCreateContainerDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Container</DialogTitle>
+            <DialogDescription>
+              Create a new container in database: <strong>{targetDatabaseId}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="containerName">Container Name</Label>
+              <Input
+                id="containerName"
+                placeholder="my-container"
+                value={newContainerName}
+                onChange={(e) => setNewContainerName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="partitionKey">Partition Key</Label>
+              <Input
+                id="partitionKey"
+                placeholder="/id"
+                value={newPartitionKey}
+                onChange={(e) => setNewPartitionKey(e.target.value)}
+              />
+              <p className={cn(
+                "text-xs transition-colors",
+                "dark:text-slate-500 text-slate-500"
+              )}>
+                The partition key path (e.g., /id, /userId, /category)
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateContainerDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateContainer} 
+              disabled={!newContainerName.trim() || !newPartitionKey.trim() || isLoading}
+            >
+              {isLoading ? <Spinner size="sm" className="mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Database Confirmation */}
+      <AlertDialog open={deleteDbDialogOpen} onOpenChange={setDeleteDbDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Database</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the database <strong>&quot;{targetDatabaseId}&quot;</strong>?
+              <br /><br />
+              <span className="text-red-500 font-medium">
+                This will permanently delete all containers and documents within this database. This action cannot be undone.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteDatabase}
+              className={cn(
+                "bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/25",
+                "hover:from-red-400 hover:to-rose-500"
+              )}
+            >
+              {isLoading ? <Spinner size="sm" className="mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Delete Database
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Container Confirmation */}
+      <AlertDialog open={deleteContainerDialogOpen} onOpenChange={setDeleteContainerDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Container</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the container <strong>&quot;{targetContainerId}&quot;</strong> from database <strong>&quot;{targetDatabaseId}&quot;</strong>?
+              <br /><br />
+              <span className="text-red-500 font-medium">
+                This will permanently delete all documents in this container. This action cannot be undone.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteContainer}
+              className={cn(
+                "bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/25",
+                "hover:from-red-400 hover:to-rose-500"
+              )}
+            >
+              {isLoading ? <Spinner size="sm" className="mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Delete Container
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: 'standalone',
+  // Disable image optimization for Electron (we're not serving from a CDN)
+  images: {
+    unoptimized: true,
+  },
 };
 
 export default nextConfig;
